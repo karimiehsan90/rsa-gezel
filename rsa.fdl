@@ -1,0 +1,121 @@
+dp gcd_dp(
+    in  a   :   ns(32);
+    in  b   :   ns(32);
+    in  load:   ns(1);
+    out c   :   ns(32);
+    out done:   ns(1)
+) {
+    reg a_in : ns(32);
+    reg b_in : ns(32);
+    reg c_out : ns(32);
+    reg lda, done_out : ns(1);
+
+    always {
+        lda = load;
+        c = c_out;
+        done = done_out;
+    }
+
+    sfg init {
+        a_in = a;
+        b_in = b;
+        done_out = 0;
+    }
+
+    sfg reduce {
+        a_in = (a_in > b_in) ? a_in - b_in : a_in;
+        b_in = (a_in > b_in) ? b_in : b_in - a_in;
+        c_out = (a_in > b_in) ? a_in : b_in;
+        done_out = a_in == 0 | b_in == 0;
+    }
+
+    sfg log {
+        $display("cycle=", $cycle, " a=", a_in, " b=", b_in, " c=", c, " done", done);
+    }
+}
+
+fsm gcd_fsm(gcd_dp) {
+    initial s0;
+    state s1, s2;
+    @s0 
+        if (lda) then (init, log) -> s1;
+        else (log) -> s0;
+    @s1 
+        if (done) then (log) -> s2;
+        else (reduce, log) -> s1;
+    @s2 (log) -> s2;
+}
+
+dp gendata(
+    out a   :   ns(32);
+    out b   :   ns(32);
+    out load:   ns(1)
+) {
+    sfg run {
+        a = 8;
+        b = 6;
+        load = 1;
+    }
+}
+
+hardwired gendata_wired(gendata) {
+    run;
+}
+
+dp pow_dp (
+    in  a   :   ns(32);
+    in  b   :   ns(32);
+    in  load:   ns(1);
+    out c   :   ns(32);
+    out done:   ns(1)
+) {
+    reg a_in, b_in, c_out, d, i : ns(32);
+    reg lda : ns(1);
+
+    always {
+        lda = load;
+        c = c_out;
+        done = i >= b;
+    }
+
+    sfg init {
+        a_in = a;
+        b_in = b;
+        i = 0;
+        c_out = 1;
+    }
+
+    sfg mul {
+        c_out = a_in * c_out;
+        i = i + 1;
+    }
+
+    sfg log {
+        $display("cycle=", $cycle, " a=", a_in, " b=", b_in, " c=", c, " done", done);
+    }
+}
+
+fsm pow_fsm(pow_dp) {
+    initial s0;
+    state s1, s2;
+
+    @s0 
+        if (lda) then (init, log) -> s1;
+        else (log) -> s0;
+    @s1 
+        if (done) then (log) -> s2;
+        else (mul, log) -> s1;
+    @s2 (log) -> s2;
+    
+}
+
+dp top {
+    sig a, b, c : ns(32);
+    sig done, load : ns(1);
+    use gendata(a, b, load);
+    use gcd_dp(a, b, load, c, done);
+}
+
+system S {
+    top;
+}
