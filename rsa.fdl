@@ -1,4 +1,4 @@
-ipblock core_block {
+/*ipblock core_block {
     iptype "armsystem";
     ipparm "exec=software";
 }
@@ -10,6 +10,30 @@ ipblock e_in(
     ipparm "core=core_block";
     ipparm "address=0x80000000";
 }
+
+ipblock z_in(
+    out z   :   ns(32)
+) {
+    iptype "armsystemsource";
+    ipparm "core=core_block";
+    ipparm "address=0x80000004";
+}
+
+ipblock d_in(
+    out d   :   ns(32)
+) {
+    iptype "armsystemsource";
+    ipparm "core=core_block";
+    ipparm "address=0x80000008";
+}
+
+ipblock lda_in(
+    out lda   :   ns(1)
+) {
+    iptype "armsystemsource";
+    ipparm "core=core_block";
+    ipparm "address=0x800000012";
+}*/
 
 dp gcd_dp(
     in  e   :   ns(32);
@@ -114,14 +138,18 @@ fsm choose_d_fsm(choose_d_dp) {
 }
 
 dp gendata(
+    out e   :   ns(32);
     out lda :   ns(1);
     out d   :   ns(32);
-    out z   :   ns(32)
+    out z   :   ns(32);
+    out msg :   ns(32)
 ) {
     sfg run {
+        e = 2;
         lda = 1;
         d = 2;
         z = 32;
+        msg = 24;
     }
 }
 
@@ -137,18 +165,67 @@ dp logger(
     }
 }
 
+dp pow_dp (
+    in  a   :   ns(32);
+    in  b   :   ns(32);
+    in  load:   ns(1);
+    out c   :   ns(32);
+    out done:   ns(1)
+) {
+    reg a_in, b_in, c_out, d, i : ns(32);
+    reg lda : ns(1);
+
+    always {
+        lda = load;
+        c = c_out;
+        done = i >= b;
+    }
+
+    sfg init {
+        a_in = a;
+        b_in = b;
+        i = 0;
+        c_out = 1;
+    }
+
+    sfg mul {
+        c_out = a_in * c_out;
+        i = i + 1;
+    }
+
+    sfg log {
+        $display("cycle=", $cycle, " a=", a_in, " b=", b_in, " c=", c, " done", done);
+    }
+}
+
+fsm pow_fsm(pow_dp) {
+    initial s0;
+    state s1, s2;
+
+    @s0 
+        if (lda) then (init, log) -> s1;
+        else (log) -> s0;
+    @s1 
+        if (done) then (log) -> s2;
+        else (mul, log) -> s1;
+    @s2 (log) -> s2;
+
+}
+
 dp top() {
-    sig e_before, z, e_after, d_after, d_before : ns(32);
-    sig done_gcd, lda, done_choose : ns(1);
-    use core_block;
-    use e_in(e_before);
+    sig e_before, z, e_after, d_after, d_before, c : ns(32);
+    sig done_gcd, lda, done_choose, done_power : ns(1);
+    sig msg : ns(32);
+    //use core_block;
+    //use e_in(e_before);
     //use z_in(z);
     //use d_in(d_before);
     //use lda_in(lda);
-    use gendata(lda, d_before, z);
-    use logger(e_before);
+    use gendata(e_before, lda, d_before, z, msg);
+    //use logger(e_before);
     use gcd_dp(e_before, z, lda, e_after, done_gcd);
     use choose_d_dp(e_after, z, d_before, done_gcd, d_after, done_choose);
+    use pow_dp(msg, e_after, done_choose, c, done_power);
 }
 
 system S {
